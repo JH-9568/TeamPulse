@@ -186,3 +186,11 @@ class ApprovalRead(BaseModel):
     approved_count: int
     pending_member_ids: list[str]
     status: BriefRevisionStatus
+
+
+class DiscordNotificationRead(BaseModel):
+    brief_revision_id: uuid.UUID
+    channel_id: str
+    delivered: bool
+    duplicate: bool
+    external_message_id: str | None = None

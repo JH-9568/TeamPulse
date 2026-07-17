@@ -20,6 +20,7 @@ Implemented in this repository:
 - Discord integration polling that stores opted-in channel messages as source items.
 - Source item normalization and idempotent storage.
 - Daily brief revision generation with a deterministic summarizer fallback.
+- Discord daily brief reminder delivery with duplicate protection.
 - Revision approval state with unanimous approval.
 - Docker Compose for API, worker, PostgreSQL, and Redis.
 - pytest coverage for idempotent ingestion and unanimous approval.

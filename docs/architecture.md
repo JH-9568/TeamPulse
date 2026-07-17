@@ -42,8 +42,9 @@ flowchart LR
 5. The daily brief job reads source items for a project/time window.
 6. The brief builder creates a new `BriefRevision` with source citations.
 7. The active member list is snapshotted into `approver_snapshot`.
-8. Members approve the exact revision hash.
-9. When all snapshotted members approve, the revision becomes confirmed.
+8. TeamPulse sends one Discord reminder for the pending revision.
+9. Members approve the exact revision hash.
+10. When all snapshotted members approve, the revision becomes confirmed.
 
 ## Connector Notes
 

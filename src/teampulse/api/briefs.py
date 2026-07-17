@@ -10,13 +10,16 @@ from teampulse.briefs.service import (
     build_daily_revision,
     create_revision,
 )
+from teampulse.config import Settings, get_settings
 from teampulse.db import get_session
 from teampulse.models import BriefRevision, Project
+from teampulse.notifications.discord import send_discord_brief_notification
 from teampulse.schemas import (
     ApprovalRead,
     BriefEditRequest,
     BriefGenerateRequest,
     BriefRevisionRead,
+    DiscordNotificationRead,
 )
 from teampulse.sources.service import list_source_items
 
@@ -93,3 +96,20 @@ async def get_approval_state(
     if revision is None or revision.project_id != project_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Brief revision not found")
     return await approval_state(session, revision)
+
+
+@router.post("/{revision_id}/notify-discord", response_model=DiscordNotificationRead)
+async def notify_brief_to_discord(
+    project_id: uuid.UUID,
+    revision_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> DiscordNotificationRead:
+    revision = await session.get(BriefRevision, revision_id)
+    if revision is None or revision.project_id != project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Brief revision not found")
+    try:
+        result = await send_discord_brief_notification(session, revision_id, settings)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return DiscordNotificationRead.model_validate(result)

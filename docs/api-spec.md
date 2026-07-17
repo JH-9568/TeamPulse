@@ -244,3 +244,21 @@ The revision becomes `confirmed` only when all snapshotted active members have a
   "status": "pending_approval"
 }
 ```
+
+### Send Discord brief reminder
+
+`POST /projects/{project_id}/briefs/{revision_id}/notify-discord`
+
+Sends one Discord message for the revision. The endpoint is idempotent: if the
+same revision was already delivered to the Discord channel, it returns
+`duplicate: true` and does not send another message.
+
+```json
+{
+  "brief_revision_id": "uuid",
+  "channel_id": "discord-channel-id",
+  "delivered": true,
+  "duplicate": false,
+  "external_message_id": "discord-message-id"
+}
+```

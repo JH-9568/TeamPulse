@@ -7,6 +7,7 @@ from teampulse.briefs.service import build_daily_revision
 from teampulse.config import get_settings
 from teampulse.db import SessionFactory
 from teampulse.integrations.discord import poll_discord_integration
+from teampulse.notifications.discord import send_discord_brief_notification
 from teampulse.sources.service import list_source_items
 
 settings = get_settings()
@@ -29,6 +30,19 @@ async def _generate_daily_brief(project_id: uuid.UUID) -> str:
     async with SessionFactory() as session:
         source_items = await list_source_items(session, project_id)
         revision = await build_daily_revision(session, project_id, source_items)
+        return str(revision.id)
+
+
+@celery_app.task(name="teampulse.generate_daily_brief_and_notify")
+def generate_daily_brief_and_notify(project_id: str) -> str:
+    return asyncio.run(_generate_daily_brief_and_notify(uuid.UUID(project_id)))
+
+
+async def _generate_daily_brief_and_notify(project_id: uuid.UUID) -> str:
+    async with SessionFactory() as session:
+        source_items = await list_source_items(session, project_id)
+        revision = await build_daily_revision(session, project_id, source_items)
+        await send_discord_brief_notification(session, revision.id, settings)
         return str(revision.id)
 
 
