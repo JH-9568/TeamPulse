@@ -39,12 +39,13 @@ flowchart LR
 2. Provider-specific connector verifies the request or credentials.
 3. Connector normalizes data into `SourceItem`.
 4. `SourceItem` is inserted idempotently by `(provider, external_id)`.
-5. The daily brief job reads source items for a project/time window.
-6. The brief builder creates a new `BriefRevision` with source citations.
-7. The active member list is snapshotted into `approver_snapshot`.
-8. TeamPulse sends one Discord reminder for the pending revision.
-9. Members approve the exact revision hash.
-10. When all snapshotted members approve, the revision becomes confirmed.
+5. Celery Beat runs the daily scheduler at `DAILY_BRIEF_HOUR:DAILY_BRIEF_MINUTE`.
+6. The scheduler polls active Discord integrations and reads source items in the daily window.
+7. The brief builder creates a new `BriefRevision` with source citations.
+8. The active member list is snapshotted into `approver_snapshot`.
+9. TeamPulse sends one Discord reminder for the pending revision.
+10. Members approve the exact revision hash.
+11. When all snapshotted members approve, the revision becomes confirmed.
 
 ## Connector Notes
 

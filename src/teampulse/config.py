@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     )
     discord_bot_token: SecretStr | None = None
     token_encryption_key: SecretStr | None = None
+    daily_brief_hour: int = 18
+    daily_brief_minute: int = 0
 
 
 @lru_cache

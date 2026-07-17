@@ -21,6 +21,7 @@ Implemented in this repository:
 - Source item normalization and idempotent storage.
 - Daily brief revision generation with a deterministic summarizer fallback.
 - Discord daily brief reminder delivery with duplicate protection.
+- Celery Beat daily scheduler for polling, brief generation, and reminder delivery.
 - Revision approval state with unanimous approval.
 - Docker Compose for API, worker, PostgreSQL, and Redis.
 - pytest coverage for idempotent ingestion and unanimous approval.
@@ -29,7 +30,7 @@ Not implemented yet:
 
 - Production authentication and organization management.
 - Real LLM provider integration.
-- Automatic recurring Discord scheduler configuration.
+- Production-grade schedule locking for multi-instance deployments.
 - Web dashboard UI.
 - Slack/GitHub integrations and source write-back.
 
