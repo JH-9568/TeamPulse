@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from teampulse.briefs.service import build_daily_revision
 from teampulse.config import Settings
-from teampulse.integrations.discord import DiscordPollResult, poll_discord_integration
+from teampulse.integrations.discord import poll_discord_integration
+from teampulse.integrations.figma import sync_figma_integration
+from teampulse.integrations.notion import sync_notion_integration
 from teampulse.models import Integration, IntegrationStatus, Project, Provider
 from teampulse.notifications.discord import (
     DiscordNotificationResult,
@@ -16,8 +18,19 @@ from teampulse.notifications.discord import (
 )
 from teampulse.sources.service import list_source_items
 
-Poller = Callable[[AsyncSession, uuid.UUID, Settings], Awaitable[DiscordPollResult]]
+IntegrationSyncer = Callable[
+    [AsyncSession, uuid.UUID, Settings],
+    Awaitable["IntegrationSyncResult"],
+]
 Notifier = Callable[[AsyncSession, uuid.UUID, Settings], Awaitable[DiscordNotificationResult]]
+
+
+class IntegrationSyncResult(BaseModel):
+    integration_id: uuid.UUID
+    provider: Provider
+    fetched: int
+    stored: int
+    duplicates: int
 
 
 class DailyProjectRun(BaseModel):
@@ -48,12 +61,12 @@ async def run_daily_project_briefs(
     session: AsyncSession,
     settings: Settings,
     *,
-    poller: Poller | None = None,
+    integration_syncer: IntegrationSyncer | None = None,
     notifier: Notifier | None = None,
     now: datetime | None = None,
 ) -> DailySchedulerResult:
     started_at = now or datetime.now(UTC)
-    poller = poller or poll_discord_integration
+    integration_syncer = integration_syncer or sync_integration
     notifier = notifier or send_discord_brief_notification
     result = await session.execute(select(Project).where(Project.active.is_(True)))
     projects = result.scalars().all()
@@ -65,7 +78,7 @@ async def run_daily_project_briefs(
                 session,
                 settings,
                 project,
-                poller=poller,
+                integration_syncer=integration_syncer,
                 notifier=notifier,
                 now=started_at,
             )
@@ -92,21 +105,21 @@ async def run_one_project(
     settings: Settings,
     project: Project,
     *,
-    poller: Poller,
+    integration_syncer: IntegrationSyncer,
     notifier: Notifier,
     now: datetime,
 ) -> DailyProjectRun:
     run = DailyProjectRun(project_id=project.id)
-    integrations = await list_active_discord_integrations(session, project.id)
+    integrations = await list_active_ingest_integrations(session, project.id)
 
     for integration in integrations:
         try:
-            poll_result = await poller(session, integration.id, settings)
+            sync_result = await integration_syncer(session, integration.id, settings)
         except Exception as exc:  # noqa: BLE001 - scheduler should continue with other projects
-            run.errors.append(f"Discord integration {integration.id}: {exc}")
+            run.errors.append(f"{integration.provider} integration {integration.id}: {exc}")
             continue
         run.integrations_polled += 1
-        run.source_items_stored += poll_result.stored
+        run.source_items_stored += sync_result.stored
 
     since = now - timedelta(days=1)
     source_items = await list_source_items(session, project.id, since=since, until=now)
@@ -130,14 +143,52 @@ async def run_one_project(
     return run
 
 
-async def list_active_discord_integrations(
+async def sync_integration(
+    session: AsyncSession,
+    integration_id: uuid.UUID,
+    settings: Settings,
+) -> IntegrationSyncResult:
+    integration = await session.get(Integration, integration_id)
+    if integration is None:
+        raise ValueError("Integration not found")
+    if integration.provider == Provider.DISCORD:
+        result = await poll_discord_integration(session, integration_id, settings)
+        return IntegrationSyncResult(
+            integration_id=result.integration_id,
+            provider=Provider.DISCORD,
+            fetched=result.fetched,
+            stored=result.stored,
+            duplicates=result.duplicates,
+        )
+    if integration.provider == Provider.FIGMA:
+        result = await sync_figma_integration(session, integration_id, settings)
+        return IntegrationSyncResult(
+            integration_id=result.integration_id,
+            provider=Provider.FIGMA,
+            fetched=result.fetched,
+            stored=result.stored,
+            duplicates=result.duplicates,
+        )
+    if integration.provider == Provider.NOTION:
+        result = await sync_notion_integration(session, integration_id, settings)
+        return IntegrationSyncResult(
+            integration_id=result.integration_id,
+            provider=Provider.NOTION,
+            fetched=result.fetched,
+            stored=result.stored,
+            duplicates=result.duplicates,
+        )
+    raise ValueError(f"Provider sync is not implemented: {integration.provider}")
+
+
+async def list_active_ingest_integrations(
     session: AsyncSession,
     project_id: uuid.UUID,
 ) -> list[Integration]:
     result = await session.execute(
         select(Integration).where(
             Integration.project_id == project_id,
-            Integration.provider == Provider.DISCORD,
+            Integration.provider.in_([Provider.DISCORD, Provider.FIGMA, Provider.NOTION]),
             Integration.status == IntegrationStatus.ACTIVE,
         )
     )
