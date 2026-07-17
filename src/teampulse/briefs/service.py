@@ -6,7 +6,9 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from teampulse.briefs.ai_summarizer import OpenAICompatibleBriefBuilder
 from teampulse.briefs.summarizer import StructuredBriefBuilder
+from teampulse.config import Settings
 from teampulse.models import (
     BriefApproval,
     BriefRevision,
@@ -28,10 +30,22 @@ async def build_daily_revision(
     project_id: uuid.UUID,
     source_items: Sequence[SourceItem],
     created_by: str = "system",
+    settings: Settings | None = None,
 ) -> BriefRevision:
-    builder = StructuredBriefBuilder()
-    content = builder.build(source_items)
+    content = await build_brief_content(source_items, settings)
     return await create_revision(session, project_id, content, source_items, created_by)
+
+
+async def build_brief_content(
+    source_items: Sequence[SourceItem],
+    settings: Settings | None = None,
+) -> BriefContent:
+    if settings and settings.ai_summarizer_url:
+        try:
+            return await OpenAICompatibleBriefBuilder(settings).build(source_items)
+        except Exception:
+            pass
+    return StructuredBriefBuilder().build(source_items)
 
 
 async def create_revision(

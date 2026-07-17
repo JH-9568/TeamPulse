@@ -31,11 +31,12 @@ async def generate_brief(
     project_id: uuid.UUID,
     payload: BriefGenerateRequest,
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> BriefRevision:
     if await session.get(Project, project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
     source_items = await list_source_items(session, project_id, payload.since, payload.until)
-    revision = await build_daily_revision(session, project_id, source_items)
+    revision = await build_daily_revision(session, project_id, source_items, settings=settings)
     return revision
 
 

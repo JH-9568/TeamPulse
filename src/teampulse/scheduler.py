@@ -128,7 +128,7 @@ async def run_one_project(
         return run
 
     try:
-        revision = await build_daily_revision(session, project.id, source_items)
+        revision = await build_daily_revision(session, project.id, source_items, settings=settings)
     except Exception as exc:  # noqa: BLE001
         run.errors.append(f"Brief generation failed: {exc}")
         return run

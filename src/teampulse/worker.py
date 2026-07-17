@@ -40,7 +40,7 @@ def generate_daily_brief(project_id: str) -> str:
 async def _generate_daily_brief(project_id: uuid.UUID) -> str:
     async with SessionFactory() as session:
         source_items = await list_source_items(session, project_id)
-        revision = await build_daily_revision(session, project_id, source_items)
+        revision = await build_daily_revision(session, project_id, source_items, settings=settings)
         return str(revision.id)
 
 
@@ -52,7 +52,7 @@ def generate_daily_brief_and_notify(project_id: str) -> str:
 async def _generate_daily_brief_and_notify(project_id: uuid.UUID) -> str:
     async with SessionFactory() as session:
         source_items = await list_source_items(session, project_id)
-        revision = await build_daily_revision(session, project_id, source_items)
+        revision = await build_daily_revision(session, project_id, source_items, settings=settings)
         await send_discord_brief_notification(session, revision.id, settings)
         return str(revision.id)
 

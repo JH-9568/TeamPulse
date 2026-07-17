@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     notion_access_token: SecretStr | None = None
     discord_bot_token: SecretStr | None = None
     token_encryption_key: SecretStr | None = None
+    ai_summarizer_url: str | None = None
+    ai_summarizer_api_key: SecretStr | None = None
+    ai_summarizer_model: str = "gpt-4.1-mini"
     daily_brief_hour: int = 18
     daily_brief_minute: int = 0
 

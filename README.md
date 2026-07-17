@@ -22,6 +22,7 @@ Implemented in this repository:
 - Discord integration polling that stores opted-in channel messages as source items.
 - Source item normalization and idempotent storage.
 - Daily brief revision generation with a deterministic summarizer fallback.
+- Optional OpenAI-compatible AI summarizer endpoint.
 - Discord daily brief reminder delivery with duplicate protection.
 - Celery Beat daily scheduler for polling, brief generation, and reminder delivery.
 - Revision approval state with unanimous approval.
@@ -57,6 +58,10 @@ If `API_KEY` is set, protected API routes require:
 ```bash
 X-TeamPulse-API-Key: your-api-key
 ```
+
+If `AI_SUMMARIZER_URL` is set, TeamPulse calls that OpenAI-compatible
+chat/completions endpoint for brief generation. If it is empty or the call
+fails, TeamPulse uses the deterministic fallback summarizer.
 
 To create a local demo workspace/project/source-items/brief:
 
