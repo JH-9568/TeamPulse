@@ -199,3 +199,16 @@ class NotificationDelivery(Base):
     external_channel_id: Mapped[str] = mapped_column(String(255))
     delivered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class SchedulerRun(Base):
+    __tablename__ = "scheduler_runs"
+    __table_args__ = (UniqueConstraint("job_name", "run_key", name="uq_scheduler_job_run"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    job_name: Mapped[str] = mapped_column(String(120), index=True)
+    run_key: Mapped[str] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="running", index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

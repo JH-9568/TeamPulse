@@ -111,3 +111,14 @@ async def test_daily_scheduler_polls_builds_and_notifies_active_projects(session
     assert result.notifications_delivered == 1
     assert result.project_runs[0].brief_revision_id is not None
     assert set(synced_integrations) == {integration.id, figma_integration.id, notion_integration.id}
+
+    duplicate = await run_daily_project_briefs(
+        session,
+        Settings(discord_bot_token="test-token"),
+        integration_syncer=fake_syncer,
+        notifier=fake_notifier,
+        now=now,
+    )
+
+    assert duplicate.projects_seen == 0
+    assert duplicate.skipped_reason == "scheduler_run_already_exists"

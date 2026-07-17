@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from teampulse.briefs.service import build_daily_revision
@@ -11,7 +12,7 @@ from teampulse.config import Settings
 from teampulse.integrations.discord import poll_discord_integration
 from teampulse.integrations.figma import sync_figma_integration
 from teampulse.integrations.notion import sync_notion_integration
-from teampulse.models import Integration, IntegrationStatus, Project, Provider
+from teampulse.models import Integration, IntegrationStatus, Project, Provider, SchedulerRun, utcnow
 from teampulse.notifications.discord import (
     DiscordNotificationResult,
     send_discord_brief_notification,
@@ -50,6 +51,7 @@ class DailySchedulerResult(BaseModel):
     projects_succeeded: int
     projects_failed: int
     projects_skipped: int
+    skipped_reason: str | None = None
     integrations_polled: int
     source_items_stored: int
     revisions_created: int
@@ -64,8 +66,19 @@ async def run_daily_project_briefs(
     integration_syncer: IntegrationSyncer | None = None,
     notifier: Notifier | None = None,
     now: datetime | None = None,
+    acquire_lock: bool = True,
 ) -> DailySchedulerResult:
     started_at = now or datetime.now(UTC)
+    scheduler_run = None
+    if acquire_lock:
+        scheduler_run = await acquire_scheduler_run(
+            session,
+            "daily_project_briefs",
+            scheduler_run_key(started_at),
+        )
+        if scheduler_run is None:
+            return empty_scheduler_result(started_at, "scheduler_run_already_exists")
+
     integration_syncer = integration_syncer or sync_integration
     notifier = notifier or send_discord_brief_notification
     result = await session.execute(select(Project).where(Project.active.is_(True)))
@@ -85,7 +98,7 @@ async def run_daily_project_briefs(
         )
 
     finished_at = datetime.now(UTC)
-    return DailySchedulerResult(
+    daily_result = DailySchedulerResult(
         started_at=started_at,
         finished_at=finished_at,
         projects_seen=len(projects),
@@ -98,6 +111,9 @@ async def run_daily_project_briefs(
         notifications_delivered=sum(1 for run in runs if run.notification_delivered),
         project_runs=runs,
     )
+    if scheduler_run:
+        await complete_scheduler_run(session, scheduler_run, daily_result)
+    return daily_result
 
 
 async def run_one_project(
@@ -193,3 +209,51 @@ async def list_active_ingest_integrations(
         )
     )
     return list(result.scalars().all())
+
+
+def scheduler_run_key(value: datetime) -> str:
+    return value.astimezone(UTC).date().isoformat()
+
+
+async def acquire_scheduler_run(
+    session: AsyncSession,
+    job_name: str,
+    key: str,
+) -> SchedulerRun | None:
+    scheduler_run = SchedulerRun(job_name=job_name, run_key=key)
+    session.add(scheduler_run)
+    try:
+        await session.commit()
+        await session.refresh(scheduler_run)
+        return scheduler_run
+    except IntegrityError:
+        await session.rollback()
+        return None
+
+
+async def complete_scheduler_run(
+    session: AsyncSession,
+    scheduler_run: SchedulerRun,
+    result: DailySchedulerResult,
+) -> None:
+    scheduler_run.status = "completed" if result.projects_failed == 0 else "completed_with_errors"
+    scheduler_run.finished_at = utcnow()
+    scheduler_run.result = result.model_dump(mode="json")
+    await session.commit()
+
+
+def empty_scheduler_result(started_at: datetime, skipped_reason: str) -> DailySchedulerResult:
+    return DailySchedulerResult(
+        started_at=started_at,
+        finished_at=datetime.now(UTC),
+        projects_seen=0,
+        projects_succeeded=0,
+        projects_failed=0,
+        projects_skipped=0,
+        skipped_reason=skipped_reason,
+        integrations_polled=0,
+        source_items_stored=0,
+        revisions_created=0,
+        notifications_delivered=0,
+        project_runs=[],
+    )
