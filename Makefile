@@ -1,4 +1,4 @@
-.PHONY: install test lint up migrate
+.PHONY: install test lint up migrate demo
 
 install:
 	python -m pip install -e '.[dev]'
@@ -15,3 +15,5 @@ up:
 migrate:
 	alembic upgrade head
 
+demo:
+	python scripts/demo_seed.py

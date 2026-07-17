@@ -49,6 +49,12 @@ curl http://localhost:8000/health
 
 API docs are available at `http://localhost:8000/docs`.
 
+To create a local demo workspace/project/source-items/brief:
+
+```bash
+docker compose exec api python scripts/demo_seed.py
+```
+
 ## Tests
 
 ```bash
