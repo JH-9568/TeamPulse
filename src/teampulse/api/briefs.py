@@ -52,6 +52,18 @@ async def list_briefs(
     return list(result.scalars().all())
 
 
+@router.get("/{revision_id}", response_model=BriefRevisionRead)
+async def get_brief(
+    project_id: uuid.UUID,
+    revision_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> BriefRevision:
+    revision = await session.get(BriefRevision, revision_id)
+    if revision is None or revision.project_id != project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Brief revision not found")
+    return revision
+
+
 @router.post(
     "/{revision_id}/edit",
     response_model=BriefRevisionRead,

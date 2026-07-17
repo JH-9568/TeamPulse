@@ -205,6 +205,13 @@ Creates a new pending revision, snapshots active members, and supersedes previou
 
 `GET /projects/{project_id}/briefs`
 
+### Get brief
+
+`GET /projects/{project_id}/briefs/{revision_id}`
+
+Returns the full brief revision content, source IDs, approver snapshot, status,
+and revision hash.
+
 ### Edit brief
 
 `POST /projects/{project_id}/briefs/{revision_id}/edit`
