@@ -86,11 +86,13 @@ class IntegrationRead(BaseModel):
 
 class IntegrationPollRead(BaseModel):
     integration_id: uuid.UUID
-    channel_id: str
+    provider: Provider
+    channel_id: str | None = None
+    file_key: str | None = None
     fetched: int
     stored: int
     duplicates: int
-    last_message_id: str | None
+    checkpoint: str | None = None
 
 
 class SourceItemCreate(BaseModel):

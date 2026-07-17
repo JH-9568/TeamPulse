@@ -17,6 +17,7 @@ Implemented in this repository:
 - PostgreSQL/SQLAlchemy 2.x models.
 - Alembic initial migration.
 - Figma and Notion webhook ingestion boundaries.
+- Figma REST sync for file metadata and comments.
 - Discord integration polling that stores opted-in channel messages as source items.
 - Source item normalization and idempotent storage.
 - Daily brief revision generation with a deterministic summarizer fallback.

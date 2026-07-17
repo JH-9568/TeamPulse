@@ -1,5 +1,8 @@
 import json
 from datetime import UTC, datetime
+from typing import Any
+
+import httpx
 
 from teampulse.connectors.base import NormalizedSourceItem
 from teampulse.models import Provider, SourceItemKind
@@ -82,3 +85,26 @@ def parse_dt(value: str | None) -> datetime:
     if not value:
         return datetime.now(UTC)
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+class FigmaClient:
+    base_url = "https://api.figma.com/v1"
+
+    async def fetch_file(self, *, access_token: str, file_key: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+            response = await client.get(
+                f"/files/{file_key}",
+                headers={"X-Figma-Token": access_token},
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def fetch_comments(self, *, access_token: str, file_key: str) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+            response = await client.get(
+                f"/files/{file_key}/comments",
+                headers={"X-Figma-Token": access_token},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return list(payload.get("comments", []))

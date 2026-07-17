@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from teampulse.config import Settings, get_settings
 from teampulse.db import get_session
 from teampulse.integrations.discord import poll_discord_integration
+from teampulse.integrations.figma import sync_figma_integration
 from teampulse.models import Integration, Project, ProjectMember, Provider, Workspace
 from teampulse.schemas import (
     IntegrationCreate,
@@ -146,10 +147,29 @@ async def poll_integration(
     integration = await session.get(Integration, integration_id)
     if integration is None or integration.project_id != project_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Integration not found")
-    if integration.provider != Provider.DISCORD:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only Discord polling is implemented")
     try:
-        result = await poll_discord_integration(session, integration_id, settings)
+        if integration.provider == Provider.DISCORD:
+            result = await poll_discord_integration(session, integration_id, settings)
+            return IntegrationPollRead(
+                integration_id=result.integration_id,
+                provider=Provider.DISCORD,
+                channel_id=result.channel_id,
+                fetched=result.fetched,
+                stored=result.stored,
+                duplicates=result.duplicates,
+                checkpoint=result.last_message_id,
+            )
+        if integration.provider == Provider.FIGMA:
+            result = await sync_figma_integration(session, integration_id, settings)
+            return IntegrationPollRead(
+                integration_id=result.integration_id,
+                provider=Provider.FIGMA,
+                file_key=result.file_key,
+                fetched=result.fetched,
+                stored=result.stored,
+                duplicates=result.duplicates,
+                checkpoint=result.last_synced_at,
+            )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Provider polling is not implemented")
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    return IntegrationPollRead.model_validate(result)

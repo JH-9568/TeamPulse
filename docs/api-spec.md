@@ -93,6 +93,22 @@ Discord integration example:
 }
 ```
 
+Figma integration example:
+
+```json
+{
+  "provider": "figma",
+  "external_id": "figma-file-key",
+  "name": "Main design",
+  "credentials": {
+    "access_token": "figma-token"
+  },
+  "config": {
+    "file_key": "figma-file-key"
+  }
+}
+```
+
 ### List integrations
 
 `GET /projects/{project_id}/integrations`
@@ -101,9 +117,10 @@ Discord integration example:
 
 `POST /projects/{project_id}/integrations/{integration_id}/poll`
 
-Currently implemented for Discord only. It fetches channel messages after
-`config.last_message_id`, stores them as source items, then updates
-`config.last_message_id`.
+Implemented providers:
+
+- Discord: fetches channel messages after `config.last_message_id`, stores them as source items, then updates `config.last_message_id`.
+- Figma: fetches file metadata and comments, stores them as source items, then updates `config.last_synced_at`.
 
 ```json
 {
