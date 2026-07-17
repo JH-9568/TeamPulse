@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     log_level: str = "INFO"
+    api_key: SecretStr | None = None
     database_url: str = "postgresql+asyncpg://teampulse:teampulse@localhost:5432/teampulse"
     redis_url: str = "redis://localhost:6379/0"
     figma_webhook_passcode: SecretStr = Field(default=SecretStr("development-only-figma"))

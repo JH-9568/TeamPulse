@@ -52,6 +52,12 @@ curl http://localhost:8000/health
 
 API docs are available at `http://localhost:8000/docs`.
 
+If `API_KEY` is set, protected API routes require:
+
+```bash
+X-TeamPulse-API-Key: your-api-key
+```
+
 To create a local demo workspace/project/source-items/brief:
 
 ```bash
