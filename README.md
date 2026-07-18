@@ -74,6 +74,78 @@ OpenBrief는 Figma, Notion, Discord, GitHub 등에 흩어진 프로젝트 맥락
 pipx install "git+https://github.com/JH-9568/OpenBrief.git"
 ```
 
+## AI 에이전트로 설치하기
+
+README를 직접 따라 하지 않아도 됩니다. Codex, Cursor, Claude Code 같은 개발 에이전트에게 아래 프롬프트를 그대로 붙여넣으면 설치, 초기 설정, 동작 확인을 맡길 수 있습니다.
+
+중요한 보안 원칙:
+
+- API key나 token은 명령어 인자로 넣지 않습니다.
+- `--token`, `--openai-api-key`, `--github-token` 방식은 shell history에 남을 수 있으므로 피합니다.
+- token 입력은 `openbrief auth ...` 숨김 입력을 사용합니다.
+- OpenBrief는 기본적으로 원본 Figma, Notion, Discord, GitHub를 수정하지 않고 읽기/정리만 합니다.
+
+### 설치 프롬프트
+
+```text
+내 컴퓨터에 OpenBrief를 설치하고 초기 실행까지 도와줘.
+
+조건:
+- 공식 저장소는 https://github.com/JH-9568/OpenBrief
+- Python 3.12 이상이 있는지 확인해줘.
+- 가능하면 pipx로 설치해줘.
+- 설치 명령은 `pipx install "git+https://github.com/JH-9568/OpenBrief.git"`를 사용해줘.
+- 설치 후 `openbrief --help`를 실행해서 정상 설치 여부를 확인해줘.
+- 그 다음 `openbrief init`을 실행해줘.
+- OpenBrief는 로컬 앱이고 기본 대시보드는 http://127.0.0.1:8000/dashboard 라는 점을 설명해줘.
+- API key나 token이 필요한 단계에서는 내가 직접 입력하게 해줘.
+- token을 명령어 인자로 넣지 말고 `openbrief auth ...` 방식의 숨김 입력을 사용해줘.
+```
+
+### GitHub 공개 저장소 테스트 프롬프트
+
+```text
+OpenBrief가 제대로 동작하는지 GitHub 공개 저장소로 테스트해줘.
+
+조건:
+- `openbrief setup --project "OpenBrief" --github-repo "JH-9568/OpenBrief"` 실행
+- `openbrief sync --provider github --brief` 실행
+- `openbrief start` 실행
+- 브라우저에서 http://127.0.0.1:8000/dashboard 를 열어서 프로젝트와 브리프가 보이는지 확인
+- 문제가 생기면 로그 위치와 해결 방법을 알려줘.
+```
+
+### 내 프로젝트 연결 프롬프트
+
+```text
+내 실제 프로젝트를 OpenBrief에 연결해줘.
+
+연결하고 싶은 도구:
+- GitHub
+- Figma
+- Notion
+- Discord
+
+주의:
+- token/API key는 절대 shell history에 남기지 마.
+- `--token`, `--openai-api-key`, `--github-token` 같은 인자 방식은 피하고 `openbrief auth ...`를 사용해.
+- 각 서비스에서 필요한 값이 무엇인지 먼저 알려줘.
+- 내가 값을 준비하면 하나씩 연결하고 `openbrief sync --brief`로 테스트해줘.
+- 수집된 내용은 로컬 DB에 저장되고, 원본 Figma/Notion/Discord/GitHub는 수정하지 않는다는 점을 확인해줘.
+```
+
+### AI 요약 설정 프롬프트
+
+```text
+OpenBrief에서 AI 요약을 사용할 수 있게 설정해줘.
+
+조건:
+- OpenAI-compatible API key는 내가 직접 입력할게.
+- `openbrief auth openai`를 사용해 숨김 입력으로 저장해줘.
+- 저장 후 `openbrief brief` 또는 `openbrief sync --brief`를 실행해서 AI 요약이 동작하는지 확인해줘.
+- key가 config.toml에 평문 저장되지 않는지 확인해줘.
+```
+
 ## 5분 Quickstart
 
 Public GitHub 저장소는 토큰 없이도 바로 테스트할 수 있습니다. 먼저 OpenBrief 자기 자신을 수집해 브리프를 만들어볼 수 있습니다.
