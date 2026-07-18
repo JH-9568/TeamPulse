@@ -887,6 +887,7 @@ def config_needs_migration(path: Path) -> bool:
 
 
 def apply_runtime_env(config: LocalConfig) -> None:
+    os.environ.setdefault(HOME_ENV, str(config.home))
     os.environ.setdefault("DATABASE_URL", config.database_url)
     os.environ.setdefault("ENVIRONMENT", "local")
     os.environ.setdefault("TOKEN_ENCRYPTION_KEY", config.token_encryption_key)
