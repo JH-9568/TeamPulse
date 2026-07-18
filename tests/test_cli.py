@@ -7,7 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from teampulse import cli
-from teampulse.models import Integration, Project, Provider
+from teampulse.models import (
+    BriefRevision,
+    Integration,
+    Project,
+    Provider,
+    SourceItem,
+    SourceItemKind,
+)
 
 
 def test_init_creates_local_config_and_sqlite_database(tmp_path, monkeypatch, capsys):
@@ -126,6 +133,41 @@ def test_sync_reports_provider_errors_without_traceback(tmp_path, monkeypatch, c
     assert "error=network unavailable" in output
 
 
+def test_setup_stores_openai_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv(cli.HOME_ENV, str(tmp_path))
+
+    exit_code = cli.main(
+        [
+            "setup",
+            "--project",
+            "Launch",
+            "--openai-api-key",
+            "sk-test",
+            "--ai-model",
+            "gpt-test",
+        ]
+    )
+
+    assert exit_code == 0
+    config = cli.load_or_default_config(tmp_path)
+    assert config.ai_summarizer_url == "https://api.openai.com/v1/chat/completions"
+    assert config.ai_summarizer_api_key == "sk-test"
+    assert config.ai_summarizer_model == "gpt-test"
+
+
+def test_brief_generates_revision_from_collected_sources(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.HOME_ENV, str(tmp_path))
+    cli.main(["setup", "--project", "Launch"])
+    asyncio.run(add_source_item(tmp_path))
+
+    exit_code = cli.main(["brief"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "brief Launch" in output
+    assert asyncio.run(count_briefs(tmp_path)) == 1
+
+
 async def load_projects_and_integrations(tmp_path):
     config = cli.load_or_default_config(tmp_path)
     engine = create_async_engine(config.database_url)
@@ -135,3 +177,34 @@ async def load_projects_and_integrations(tmp_path):
         integrations = list((await session.execute(select(Integration))).scalars().all())
     await engine.dispose()
     return projects, integrations
+
+
+async def add_source_item(tmp_path):
+    config = cli.load_or_default_config(tmp_path)
+    engine = create_async_engine(config.database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        project = (await session.execute(select(Project))).scalar_one()
+        session.add(
+            SourceItem(
+                project_id=project.id,
+                provider=Provider.GITHUB,
+                external_id="test:source:1",
+                kind=SourceItemKind.TASK_CHANGE,
+                title="GitHub issue #1",
+                body="TODO: 정리 버튼을 추가한다.",
+                occurred_at=project.created_at,
+            )
+        )
+        await session.commit()
+    await engine.dispose()
+
+
+async def count_briefs(tmp_path):
+    config = cli.load_or_default_config(tmp_path)
+    engine = create_async_engine(config.database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        count = len(list((await session.execute(select(BriefRevision))).scalars().all()))
+    await engine.dispose()
+    return count

@@ -20,12 +20,21 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from teampulse.briefs.service import build_daily_revision
 from teampulse.config import Settings
 from teampulse.integrations.discord import poll_discord_integration
 from teampulse.integrations.figma import sync_figma_integration
 from teampulse.integrations.github import sync_github_integration
 from teampulse.integrations.notion import sync_notion_integration
-from teampulse.models import Base, Integration, Project, ProjectMember, Provider, Workspace
+from teampulse.models import (
+    Base,
+    Integration,
+    Project,
+    ProjectMember,
+    Provider,
+    SourceItem,
+    Workspace,
+)
 from teampulse.security import CredentialCipher
 
 HOME_ENV = "TEAMPULSE_HOME"
@@ -45,6 +54,9 @@ class LocalConfig:
     pid_path: Path
     run_path: Path
     token_encryption_key: str
+    ai_summarizer_url: str | None
+    ai_summarizer_api_key: str | None
+    ai_summarizer_model: str
 
     @property
     def dashboard_url(self) -> str:
@@ -77,11 +89,21 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument("--home", type=Path, help="Override TeamPulse local app directory")
     start_parser.set_defaults(func=start_command)
 
-    setup_parser = subparsers.add_parser("setup", help="Create a project and connect sources")
+    setup_parser = subparsers.add_parser("setup", help="Create a local project and connect sources")
     setup_parser.add_argument("--home", type=Path, help="Override TeamPulse local app directory")
-    setup_parser.add_argument("--project-name", default="TeamPulse Project")
+    setup_parser.add_argument(
+        "--project",
+        "--project-name",
+        dest="project_name",
+        default="TeamPulse Project",
+    )
     setup_parser.add_argument("--description", default="")
-    setup_parser.add_argument("--member", action="append", default=[], help="Member as Name:email")
+    setup_parser.add_argument(
+        "--member",
+        action="append",
+        default=[],
+        help="Advanced: approver as Name:email. Defaults to a local owner.",
+    )
     setup_parser.add_argument("--figma-file-url", default=None)
     setup_parser.add_argument("--figma-token", default=None)
     setup_parser.add_argument("--notion-page-url", action="append", default=[])
@@ -90,6 +112,13 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument("--discord-bot-token", default=None)
     setup_parser.add_argument("--github-repo", default=None)
     setup_parser.add_argument("--github-token", default=None)
+    setup_parser.add_argument("--openai-api-key", default=None)
+    setup_parser.add_argument(
+        "--ai-url",
+        default="https://api.openai.com/v1/chat/completions",
+        help="OpenAI-compatible chat/completions endpoint",
+    )
+    setup_parser.add_argument("--ai-model", default="gpt-4.1-mini")
     setup_parser.set_defaults(func=setup_command)
 
     sync_parser = subparsers.add_parser("sync", help="Poll connected sources into TeamPulse")
@@ -100,7 +129,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only sync one provider",
     )
     sync_parser.add_argument("--project-id", default=None, help="Only sync one project UUID")
+    sync_parser.add_argument("--brief", action="store_true", help="Generate a brief after sync")
     sync_parser.set_defaults(func=sync_command)
+
+    brief_parser = subparsers.add_parser("brief", help="Generate a brief from collected sources")
+    brief_parser.add_argument("--home", type=Path, help="Override TeamPulse local app directory")
+    brief_parser.add_argument("--project-id", default=None, help="Project UUID")
+    brief_parser.set_defaults(func=brief_command)
 
     stop_parser = subparsers.add_parser("stop", help="Stop a background TeamPulse process")
     stop_parser.add_argument("--home", type=Path, help="Override TeamPulse local app directory")
@@ -191,10 +226,19 @@ def status_command(args: argparse.Namespace) -> int:
 
 def setup_command(args: argparse.Namespace) -> int:
     config = ensure_initialized(home_arg=args.home, force=False)
+    if args.openai_api_key:
+        config = save_ai_settings(
+            config,
+            api_key=args.openai_api_key,
+            url=args.ai_url,
+            model=args.ai_model,
+        )
     result = asyncio.run(configure_local_project(config, args))
     print(f"Configured project: {result['project_name']} ({result['project_id']})")
     for line in result["integrations"]:
         print(f"- {line}")
+    if args.openai_api_key:
+        print(f"- ai model={config.ai_summarizer_model}")
     print(f"Dashboard: {config.dashboard_url}/projects/{result['project_id']}")
     return 0
 
@@ -214,6 +258,30 @@ def sync_command(args: argparse.Namespace) -> int:
                 f"fetched={result['fetched']} stored={result['stored']} "
                 f"duplicates={result['duplicates']} checkpoint={result['checkpoint']}"
             )
+    if args.brief:
+        brief_results = asyncio.run(generate_local_briefs(config, args.project_id))
+        for brief in brief_results:
+            print(
+                f"brief {brief['project_name']}: "
+                f"revision=v{brief['version']} status={brief['status']} "
+                f"sources={brief['source_count']}"
+            )
+    return 0
+
+
+def brief_command(args: argparse.Namespace) -> int:
+    config = ensure_initialized(home_arg=args.home, force=False)
+    results = asyncio.run(generate_local_briefs(config, args.project_id))
+    if not results:
+        print("No source items available. Run `teampulse sync` first.")
+        return 0
+    for result in results:
+        print(
+            f"brief {result['project_name']}: "
+            f"revision=v{result['version']} status={result['status']} "
+            f"sources={result['source_count']}"
+        )
+        print(f"Dashboard: {config.dashboard_url}/projects/{result['project_id']}")
     return 0
 
 
@@ -434,7 +502,7 @@ async def sync_local_integrations(
     project_id_filter: str | None,
 ) -> list[dict]:
     factory, engine = session_factory(config)
-    settings = Settings(token_encryption_key=config.token_encryption_key)
+    settings = local_settings(config)
     try:
         async with factory() as session:
             query = select(Integration).order_by(Integration.created_at.asc())
@@ -456,6 +524,52 @@ async def sync_local_integrations(
                         "provider": integration.provider.value,
                         "name": integration.name,
                         **result,
+                    }
+                )
+            return results
+    finally:
+        await engine.dispose()
+
+
+async def generate_local_briefs(
+    config: LocalConfig,
+    project_id_filter: str | None,
+) -> list[dict]:
+    factory, engine = session_factory(config)
+    settings = local_settings(config)
+    try:
+        async with factory() as session:
+            project_query = select(Project).order_by(Project.created_at.asc())
+            if project_id_filter:
+                project_query = project_query.where(Project.id == uuid.UUID(project_id_filter))
+            project_rows = await session.execute(project_query)
+            projects = list(project_rows.scalars().all())
+
+            results: list[dict] = []
+            for project in projects:
+                source_rows = await session.execute(
+                    select(SourceItem)
+                    .where(SourceItem.project_id == project.id)
+                    .order_by(SourceItem.occurred_at.desc())
+                    .limit(200)
+                )
+                source_items = list(source_rows.scalars().all())
+                if not source_items:
+                    continue
+                revision = await build_daily_revision(
+                    session,
+                    project.id,
+                    source_items,
+                    created_by="local-cli",
+                    settings=settings,
+                )
+                results.append(
+                    {
+                        "project_id": str(project.id),
+                        "project_name": project.name,
+                        "version": revision.version,
+                        "status": revision.status.value,
+                        "source_count": len(source_items),
                     }
                 )
             return results
@@ -503,6 +617,15 @@ async def sync_one_integration(
     raise ValueError(f"{integration.provider.value} sync is not implemented")
 
 
+def local_settings(config: LocalConfig) -> Settings:
+    return Settings(
+        token_encryption_key=config.token_encryption_key,
+        ai_summarizer_url=config.ai_summarizer_url,
+        ai_summarizer_api_key=config.ai_summarizer_api_key,
+        ai_summarizer_model=config.ai_summarizer_model,
+    )
+
+
 def session_factory(config: LocalConfig) -> tuple[async_sessionmaker[AsyncSession], Any]:
     engine = create_async_engine(config.database_url)
     return async_sessionmaker(engine, expire_on_commit=False), engine
@@ -525,6 +648,7 @@ def load_or_default_config(home_arg: Path | None) -> LocalConfig:
     database = data.get("database", {})
     app = data.get("app", {})
     secrets = data.get("secrets", {})
+    ai = data.get("ai", {})
     return LocalConfig(
         home=home,
         config_path=config_path,
@@ -538,6 +662,11 @@ def load_or_default_config(home_arg: Path | None) -> LocalConfig:
         token_encryption_key=str(
             secrets.get("token_encryption_key", default.token_encryption_key)
         ),
+        ai_summarizer_url=optional_string(ai.get("summarizer_url", default.ai_summarizer_url)),
+        ai_summarizer_api_key=optional_string(
+            secrets.get("ai_summarizer_api_key", default.ai_summarizer_api_key)
+        ),
+        ai_summarizer_model=str(ai.get("model", default.ai_summarizer_model)),
     )
 
 
@@ -554,6 +683,9 @@ def default_config(home: Path) -> LocalConfig:
         pid_path=home / "teampulse.pid",
         run_path=home / "run.json",
         token_encryption_key=Fernet.generate_key().decode(),
+        ai_summarizer_url=None,
+        ai_summarizer_api_key=None,
+        ai_summarizer_model="gpt-4.1-mini",
     )
 
 
@@ -575,6 +707,9 @@ def with_overrides(
         pid_path=config.pid_path,
         run_path=config.run_path,
         token_encryption_key=config.token_encryption_key,
+        ai_summarizer_url=config.ai_summarizer_url,
+        ai_summarizer_api_key=config.ai_summarizer_api_key,
+        ai_summarizer_model=config.ai_summarizer_model,
     )
 
 
@@ -595,24 +730,73 @@ log_path = "{config.log_path}"
 pid_path = "{config.pid_path}"
 run_path = "{config.run_path}"
 
+[ai]
+summarizer_url = {toml_string_or_none(config.ai_summarizer_url)}
+model = "{config.ai_summarizer_model}"
+
 [secrets]
 token_encryption_key = "{config.token_encryption_key}"
+ai_summarizer_api_key = {toml_string_or_none(config.ai_summarizer_api_key)}
 """,
         encoding="utf-8",
     )
+
+
+def save_ai_settings(
+    config: LocalConfig,
+    *,
+    api_key: str,
+    url: str,
+    model: str,
+) -> LocalConfig:
+    updated = LocalConfig(
+        home=config.home,
+        config_path=config.config_path,
+        database_url=config.database_url,
+        host=config.host,
+        port=config.port,
+        open_browser=config.open_browser,
+        log_path=config.log_path,
+        pid_path=config.pid_path,
+        run_path=config.run_path,
+        token_encryption_key=config.token_encryption_key,
+        ai_summarizer_url=url,
+        ai_summarizer_api_key=api_key,
+        ai_summarizer_model=model,
+    )
+    write_config(updated)
+    return updated
+
+
+def toml_string_or_none(value: str | None) -> str:
+    if not value:
+        return '""'
+    return json.dumps(value)
+
+
+def optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def config_needs_migration(path: Path) -> bool:
     if not path.exists():
         return False
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    return "token_encryption_key" not in data.get("secrets", {})
+    return "token_encryption_key" not in data.get("secrets", {}) or "ai" not in data
 
 
 def apply_runtime_env(config: LocalConfig) -> None:
     os.environ.setdefault("DATABASE_URL", config.database_url)
     os.environ.setdefault("ENVIRONMENT", "local")
     os.environ.setdefault("TOKEN_ENCRYPTION_KEY", config.token_encryption_key)
+    if config.ai_summarizer_url:
+        os.environ.setdefault("AI_SUMMARIZER_URL", config.ai_summarizer_url)
+    if config.ai_summarizer_api_key:
+        os.environ.setdefault("AI_SUMMARIZER_API_KEY", config.ai_summarizer_api_key)
+    os.environ.setdefault("AI_SUMMARIZER_MODEL", config.ai_summarizer_model)
 
 
 def local_home(home_arg: Path | None = None) -> Path:

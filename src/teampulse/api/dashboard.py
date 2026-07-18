@@ -55,11 +55,11 @@ def render_dashboard_home(projects: list[Project]) -> str:
     body = f"""
     <section class="hero">
       <div>
-        <p class="eyebrow">TeamPulse Workspace</p>
-        <h1>프로젝트 맥락을 한 화면에서 확인하세요.</h1>
+        <p class="eyebrow">TeamPulse Local</p>
+        <h1>흩어진 프로젝트 맥락을 로컬에서 정리하세요.</h1>
         <p class="hero-copy">
           Figma, Notion, Discord, GitHub, Slack에 흩어진 회의·시안·업무 변경을
-          읽기 전용으로 모아 팀이 같은 이해를 갖도록 돕습니다.
+          읽기 전용으로 모아 근거 기반 브리프로 정리합니다.
         </p>
       </div>
       <div class="hero-panel">
@@ -164,9 +164,9 @@ def render_project_dashboard(
         <small>{brief_status}</small>
       </article>
       <article class="metric-card">
-        <span>Members</span>
+        <span>Reviewers</span>
         <strong>{len(members)}</strong>
-        <small>approval participants</small>
+        <small>local confirmation profile</small>
       </article>
       <article class="metric-card">
         <span>Evidence</span>
@@ -179,7 +179,7 @@ def render_project_dashboard(
       <div class="main-column">
         <div class="section-heading">
           <p class="eyebrow">AI Brief</p>
-          <h2>Latest Brief · 팀이 확인해야 할 오늘의 정리</h2>
+          <h2>Latest Brief · 검토할 프로젝트 정리</h2>
         </div>
         {brief_html}
       </div>
@@ -686,8 +686,8 @@ def render_approval_panel(
     <article class="approval-card">
       <div class="approval-header">
         <div>
-          <p class="eyebrow">Team confirmation</p>
-          <h3>모두 승인 후 정리본 확정</h3>
+          <p class="eyebrow">Local confirmation</p>
+          <h3>검토 후 정리본 확정</h3>
         </div>
         <span class="status-badge">{state.approved_count} / {state.required_count}</span>
       </div>
@@ -698,7 +698,7 @@ def render_approval_panel(
       <div class="toolbar">
         <select id="member-id">{member_options}</select>
         <input id="api-key" placeholder="API key if configured">
-        <button onclick="approveBrief()">Approve revision</button>
+        <button onclick="approveBrief()">Confirm revision</button>
       </div>
       <p id="approval-result" class="muted"></p>
     </article>
@@ -713,8 +713,8 @@ def render_approval_panel(
           {{method: 'POST', headers}}
         );
         document.getElementById('approval-result').textContent = response.ok
-          ? 'Approved. Refresh to see the updated state.'
-          : 'Approval failed: ' + await response.text();
+          ? 'Confirmed. Refresh to see the updated state.'
+          : 'Confirmation failed: ' + await response.text();
       }}
     </script>
     """

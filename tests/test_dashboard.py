@@ -48,7 +48,7 @@ async def test_project_dashboard_renders_latest_brief_and_sources(session):
     assert "Launch" in response.text
     assert "Latest Brief" in response.text
     assert "Dashboard decision" in response.text
-    assert "Approval" in response.text
+    assert "Confirmation" in response.text
     assert "Alice" in response.text
 
 
