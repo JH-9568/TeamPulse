@@ -155,6 +155,32 @@ def test_setup_stores_openai_settings(tmp_path, monkeypatch):
     assert config.ai_summarizer_model == "gpt-test"
 
 
+def test_auth_stores_openai_settings_from_prompt(tmp_path, monkeypatch):
+    monkeypatch.setenv(cli.HOME_ENV, str(tmp_path))
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "sk-prompt")
+
+    exit_code = cli.main(["auth", "openai", "--ai-model", "gpt-prompt"])
+
+    assert exit_code == 0
+    config = cli.load_or_default_config(tmp_path)
+    assert config.ai_summarizer_api_key == "sk-prompt"
+    assert config.ai_summarizer_model == "gpt-prompt"
+
+
+def test_auth_updates_existing_provider_integration(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.HOME_ENV, str(tmp_path))
+    cli.main(["setup", "--project", "Launch", "--github-repo", "JH-9568/OpenBrief"])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "github-token")
+
+    exit_code = cli.main(["auth", "github"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Stored github token for 1 integration" in output
+    integrations = asyncio.run(load_projects_and_integrations(tmp_path))[1]
+    assert integrations[0].encrypted_credentials
+
+
 def test_brief_generates_revision_from_collected_sources(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(cli.HOME_ENV, str(tmp_path))
     cli.main(["setup", "--project", "Launch"])

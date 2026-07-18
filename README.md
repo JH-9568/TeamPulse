@@ -74,6 +74,34 @@ OpenBrief는 Figma, Notion, Discord, GitHub 등에 흩어진 프로젝트 맥락
 pipx install "git+https://github.com/JH-9568/OpenBrief.git"
 ```
 
+## 5분 Quickstart
+
+Public GitHub 저장소는 토큰 없이도 바로 테스트할 수 있습니다. 먼저 OpenBrief 자기 자신을 수집해 브리프를 만들어볼 수 있습니다.
+
+```bash
+openbrief init
+
+openbrief setup \
+  --project "OpenBrief" \
+  --github-repo "JH-9568/OpenBrief"
+
+openbrief sync --provider github --brief
+openbrief start
+```
+
+브라우저에서 확인합니다.
+
+```text
+http://127.0.0.1:8000/dashboard
+```
+
+AI 품질을 높이려면 OpenAI API key를 저장한 뒤 다시 브리프를 생성합니다.
+
+```bash
+openbrief auth openai
+openbrief brief
+```
+
 설치 후 초기화합니다.
 
 ```bash
@@ -150,8 +178,17 @@ openbrief setup \
   --discord-channel-id "1234567890" \
   --discord-bot-token "..." \
   --github-repo "JH-9568/OpenBrief" \
-  --github-token "github_pat_..." \
-  --openai-api-key "sk-..."
+  --github-token "github_pat_..."
+```
+
+토큰을 명령어 인자로 넣으면 shell history에 남을 수 있습니다. 실사용에서는 `openbrief auth`로 숨김 입력하는 방식을 권장합니다.
+
+```bash
+openbrief auth openai
+openbrief auth figma
+openbrief auth notion
+openbrief auth discord
+openbrief auth github
 ```
 
 등록 후 데이터를 수집합니다.
@@ -196,7 +233,7 @@ openbrief brief
   logs/
 ```
 
-provider token은 `openbrief setup` 시 로컬 SQLite DB에 암호화되어 저장됩니다. OpenAI API key는 `~/.openbrief/config.toml`에 저장됩니다.
+provider token은 `openbrief setup` 또는 `openbrief auth` 시 로컬 SQLite DB에 암호화되어 저장됩니다. OpenAI API key는 `~/.openbrief/config.toml`에 저장됩니다.
 
 암호화 키는 현재 `~/.openbrief/config.toml`에 저장됩니다. 따라서 `~/.openbrief` 디렉터리는 일반 앱 데이터처럼 보호해야 합니다.
 
@@ -306,11 +343,7 @@ Figma, Notion, Discord, GitHub에서 가져온 내용은 그대로 보면 정리
 OpenAI API key를 넣으면 기본적으로 OpenAI 호환 `chat/completions` endpoint를 호출합니다.
 
 ```bash
-openbrief setup \
-  --project "Brand Renewal Sprint" \
-  --github-repo "JH-9568/OpenBrief" \
-  --openai-api-key "sk-..."
-
+openbrief auth openai
 openbrief sync --brief
 ```
 

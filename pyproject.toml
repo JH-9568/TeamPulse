@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Open-source local project brief generator"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+keywords = ["ai", "brief", "cli", "discord", "figma", "github", "local-first", "notion"]
 dependencies = [
   "alembic>=1.13,<2",
   "aiosqlite>=0.20,<1",

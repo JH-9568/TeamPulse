@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import json
 import os
 import signal
@@ -120,6 +121,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     setup_parser.add_argument("--ai-model", default="gpt-4.1-mini")
     setup_parser.set_defaults(func=setup_command)
+
+    auth_parser = subparsers.add_parser("auth", help="Store provider/API tokens securely")
+    auth_parser.add_argument(
+        "provider",
+        choices=["openai", "figma", "notion", "discord", "github"],
+        help="Provider to authenticate",
+    )
+    auth_parser.add_argument("--home", type=Path, help="Override OpenBrief local app directory")
+    auth_parser.add_argument("--project-id", default=None, help="Only update one project UUID")
+    auth_parser.add_argument("--token", default=None, help="Token value. Prefer prompt input.")
+    auth_parser.add_argument(
+        "--ai-url",
+        default="https://api.openai.com/v1/chat/completions",
+        help="OpenAI-compatible chat/completions endpoint",
+    )
+    auth_parser.add_argument("--ai-model", default="gpt-4.1-mini")
+    auth_parser.set_defaults(func=auth_command)
 
     sync_parser = subparsers.add_parser("sync", help="Poll connected sources into OpenBrief")
     sync_parser.add_argument("--home", type=Path, help="Override OpenBrief local app directory")
@@ -240,6 +258,34 @@ def setup_command(args: argparse.Namespace) -> int:
     if args.openai_api_key:
         print(f"- ai model={config.ai_summarizer_model}")
     print(f"Dashboard: {config.dashboard_url}/projects/{result['project_id']}")
+    return 0
+
+
+def auth_command(args: argparse.Namespace) -> int:
+    config = ensure_initialized(home_arg=args.home, force=False)
+    token = args.token or prompt_secret(f"{args.provider} token")
+    if args.provider == "openai":
+        config = save_ai_settings(
+            config,
+            api_key=token,
+            url=args.ai_url,
+            model=args.ai_model,
+        )
+        print(f"Stored OpenAI-compatible API key for model {config.ai_summarizer_model}.")
+        return 0
+
+    updated = asyncio.run(
+        update_provider_credentials(
+            config,
+            provider=Provider(args.provider),
+            token=token,
+            project_id_filter=args.project_id,
+        )
+    )
+    if updated == 0:
+        print(f"No {args.provider} integrations found. Run `openbrief setup` first.")
+        return 0
+    print(f"Stored {args.provider} token for {updated} integration(s).")
     return 0
 
 
@@ -494,6 +540,42 @@ async def add_local_integration(
             config=config_data,
         )
     )
+
+
+async def update_provider_credentials(
+    config: LocalConfig,
+    *,
+    provider: Provider,
+    token: str,
+    project_id_filter: str | None,
+) -> int:
+    factory, engine = session_factory(config)
+    try:
+        async with factory() as session:
+            query = select(Integration).where(Integration.provider == provider)
+            if project_id_filter:
+                query = query.where(Integration.project_id == uuid.UUID(project_id_filter))
+            rows = await session.execute(query)
+            integrations = list(rows.scalars().all())
+            if not integrations:
+                return 0
+
+            credential_key = credential_key_for_provider(provider)
+            cipher = CredentialCipher(config.token_encryption_key)
+            for integration in integrations:
+                integration.encrypted_credentials = cipher.encrypt(
+                    json.dumps({credential_key: token})
+                )
+            await session.commit()
+            return len(integrations)
+    finally:
+        await engine.dispose()
+
+
+def credential_key_for_provider(provider: Provider) -> str:
+    if provider == Provider.DISCORD:
+        return "bot_token"
+    return "access_token"
 
 
 async def sync_local_integrations(
@@ -844,6 +926,13 @@ def parse_github_repo(value: str) -> str:
     if len(parts) < 2:
         raise ValueError("--github-repo must be owner/repo or a GitHub repository URL")
     return f"{parts[0]}/{parts[1]}"
+
+
+def prompt_secret(label: str) -> str:
+    token = getpass.getpass(f"{label}: ").strip()
+    if not token:
+        raise ValueError(f"{label} is required")
+    return token
 
 
 def write_runtime(config: LocalConfig) -> None:
