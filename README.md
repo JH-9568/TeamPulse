@@ -200,6 +200,28 @@ openbrief status
 openbrief stop
 ```
 
+## macOS `.app` launcher 만들기
+
+OpenBrief는 기본적으로 CLI로 설치하고 브라우저에서 쓰는 로컬 웹앱입니다. 더블클릭으로 실행하고 싶다면 무료 `.app` launcher를 만들 수 있습니다.
+
+```bash
+pipx install "git+https://github.com/JH-9568/OpenBrief.git"
+git clone https://github.com/JH-9568/OpenBrief.git
+cd OpenBrief
+scripts/build_macos_app.sh
+open dist/OpenBrief.app
+```
+
+이 launcher는 새 앱 번들이지만 OpenBrief 본체를 포함하지 않습니다. 내부적으로 설치된 `openbrief start --daemon`을 실행하고 `http://127.0.0.1:8000/dashboard`를 엽니다.
+
+현재 `.app`은 서명/공증되지 않습니다.
+
+- `.app` 생성 비용: 무료
+- GitHub Release 배포: 무료
+- Apple Developer Program 서명/공증: 선택 사항, 연 $99
+
+서명하지 않은 앱은 macOS Gatekeeper 경고가 뜰 수 있습니다. 초기 오픈소스 배포에서는 정상적인 한계입니다.
+
 ## 개발 환경에서 실행하기
 
 레포를 클론한 상태에서는 editable install로 실행할 수 있습니다.

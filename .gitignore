@@ -7,4 +7,5 @@ __pycache__/
 *.py[cod]
 *.db
 .secrets.json
+dist/
 .DS_Store
