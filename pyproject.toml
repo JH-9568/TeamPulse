@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openbrief"
-version = "0.1.1"
+version = "0.1.2"
 description = "Open-source local project brief generator"
 readme = "README.md"
 requires-python = ">=3.12"
