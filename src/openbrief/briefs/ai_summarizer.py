@@ -55,7 +55,14 @@ class OpenAICompatibleBriefBuilder:
                         "{sections:[{key,title,claims:[{text,status,source_item_ids}]}],"
                         "source_window:{},diff_from_last_confirmed:[]}. Every claim must include "
                         "source_item_ids or use status 'needs_confirmation'. Valid statuses are "
-                        "confirmed, ai_inference, conflict, needs_confirmation."
+                        "confirmed, ai_inference, conflict, needs_confirmation. Classify Figma "
+                        "comments into design feedback or tasks, Notion pages into planning/tasks/"
+                        "completed/schedule risks, Discord meeting messages into decisions/tasks/"
+                        "blockers, and GitHub PR/Issue/Commit/CI activity into development "
+                        "context. "
+                        "Do not invent owners, dates, or decisions without source evidence. "
+                        "If a meeting message implies an action item or owner, mark it "
+                        "ai_inference."
                     ),
                 },
                 {

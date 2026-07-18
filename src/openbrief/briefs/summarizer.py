@@ -44,16 +44,46 @@ class StructuredBriefBuilder:
 
     def _section_key(self, item: SourceItem) -> str:
         lowered = f"{item.title}\n{item.body}".lower()
+        provider = item.provider.value
+        metadata_text = str(item.source_metadata).lower()
         if any(token in lowered for token in ["conflict", "contradict", "충돌"]):
             return "conflicts"
-        if any(token in lowered for token in ["decision", "decided", "결정"]):
+        if any(
+            token in lowered
+            for token in ["decision", "decided", "결정", "결론", "합의", "/meeting-end"]
+        ):
             return "decisions"
-        if any(token in lowered for token in ["blocker", "blocked", "지연", "막힘", "overdue"]):
+        if any(
+            token in lowered
+            for token in ["blocker", "blocked", "지연", "막힘", "overdue", "기한 초과"]
+        ):
             return "schedule_risks"
-        if any(token in lowered for token in ["todo", "할 일", "해야", "/status"]):
+        if any(
+            token in lowered
+            for token in ["todo", "할 일", "해야", "담당", "assign", "action item", "/status"]
+        ):
             return "tasks"
-        if any(token in lowered for token in ["done", "completed", "완료", "끝남"]):
+        if any(token in lowered for token in ["done", "completed", "완료", "끝남", "merged"]):
             return "completed"
+        if provider == "figma" and item.kind == SourceItemKind.DESIGN_COMMENT:
+            if any(token in lowered for token in ["todo", "수정", "확인", "반영", "요청"]):
+                return "tasks"
+            return "design_changes"
+        if provider == "notion":
+            if any(token in metadata_text for token in ["done", "complete", "완료"]):
+                return "completed"
+            if any(token in metadata_text for token in ["due", "deadline", "지연", "overdue"]):
+                return "schedule_risks"
+            return "planning"
+        if provider == "discord" and item.kind == SourceItemKind.MEETING_MESSAGE:
+            if any(token in lowered for token in ["결정", "결론", "담당", "하기로"]):
+                return "decisions"
+            return "planning"
+        if provider == "github":
+            if any(token in lowered for token in ["pull request", "pr", "review", "blocked"]):
+                return "schedule_risks" if "blocked" in lowered else "tasks"
+            if "issue" in lowered:
+                return "tasks"
         if item.kind == SourceItemKind.DESIGN_UPDATE:
             return "design_changes"
         if item.kind == SourceItemKind.DESIGN_COMMENT:
@@ -65,10 +95,22 @@ class StructuredBriefBuilder:
         return "conflicts"
 
     def _claim_text(self, item: SourceItem) -> str:
+        prefix = self._claim_prefix(item)
         body = item.body.strip()
         if body:
-            return f"{item.title}: {body[:500]}"
-        return item.title
+            return f"{prefix}{item.title}: {body[:500]}"
+        return f"{prefix}{item.title}"
+
+    def _claim_prefix(self, item: SourceItem) -> str:
+        if item.provider.value == "figma":
+            return "Figma 디자인 맥락 · "
+        if item.provider.value == "notion":
+            return "Notion 업무/문서 · "
+        if item.provider.value == "discord":
+            return "Discord 회의/대화 · "
+        if item.provider.value == "github":
+            return "GitHub 개발 맥락 · "
+        return ""
 
     def _claim_status(self, item: SourceItem) -> ClaimStatus:
         lowered = f"{item.title}\n{item.body}".lower()
